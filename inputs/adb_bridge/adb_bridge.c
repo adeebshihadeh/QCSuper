@@ -433,7 +433,7 @@ __enable_logging_libdiag (int mode)
      */
     handle = NULL;
     for (unsigned int i = 0; i < sizeof(LIB_DIAG_PATH) / sizeof(LIB_DIAG_PATH[0]) && !handle; ++i) {
-        sprintf(libdiag_copycmd, "su -c cp %s " LIBDIAG_TMPPATH "\n", LIB_DIAG_PATH[i]);
+        sprintf(libdiag_copycmd, "cp %s " LIBDIAG_TMPPATH "\n", LIB_DIAG_PATH[i]);
         system(libdiag_copycmd);
         handle = dlopen(LIBDIAG_TMPPATH, RTLD_NOW);
         if (!handle)
@@ -441,8 +441,9 @@ __enable_logging_libdiag (int mode)
         // else
         //     LOGI("dlopen %s succeeded\n", LIB_DIAG_PATH[i]);
     }
-    if (!handle)
+    if (!handle) {
         return -1;
+    }
 
     // Note diag_switch_logging does NOT have a return value in general.
     err = "diag_switch_logging";
@@ -468,10 +469,15 @@ __enable_logging_libdiag (int mode)
      * related to our goal.
      */
     *diag_fd_ptr = diag_fd;
-    (*diag_switch_logging)(mode, NULL);
+    for (int i = 0; i < 10; i++) {
+      (*diag_switch_logging)(mode, NULL);
+      if (logging_mode && *logging_mode == mode) break;
+      LOGE("logging mode = %d, mode = %d\n", *logging_mode, mode);
+    }
 
     if (logging_mode && *logging_mode != mode) {
         LOGE("diag_switch_logging in libdiag.so failed\n");
+        LOGE("logging mode = %d, mode = %d\n", *logging_mode, mode);
         ret = -1;
     } else if (!logging_mode) {
         LOGW("Missing symbol logging_mode in libdiag.so, "
@@ -558,7 +564,7 @@ enable_logging (int diag_fd, int mode)
      * for now.
      */
     // Testing: get device info
-    char *board_pf_cmd = "su -c getprop ro.board.platform";
+    char *board_pf_cmd = "getprop ro.board.platform";
     char board_name[256];
     FILE *fp;
     if ((fp = popen(board_pf_cmd, "r")) != NULL) {
@@ -568,7 +574,7 @@ enable_logging (int diag_fd, int mode)
         pclose(fp);
     }
 
-    char *sys_ver_cmd = "su -c getprop ro.build.version.release";
+    char *sys_ver_cmd = "getprop ro.build.version.release";
     char system_version[256];
     if ((fp = popen(sys_ver_cmd, "r")) != NULL) {
         while (fgets(system_version, 256, fp) != NULL) {
@@ -680,7 +686,7 @@ next:
         //     LOGI("Using libdiag.so to switch logging succeeded\n");
     }
     if (ret >= 0) {
-        // LOGD("Enable logging mode success.\n");
+        LOGD("Enable logging mode success.\n");
 
         // Register a DCI client
         struct diag_dci_reg_tbl_t dci_client;
@@ -716,7 +722,7 @@ next:
 
     } else {
         error("ioctl");
-        // LOGD("Failed to enable logging mode: %s.\n", strerror(errno));
+        LOGD("Failed to enable logging mode: %s.\n", strerror(errno));
     }
 
     return ret;
